@@ -13,7 +13,7 @@ items keep the Apify playwright-scraper dataset shape.
 Use a fine-grained token with **Actions: Read and write** on this repository only.
 
 ```http
-POST https://api.github.com/repos/haider91/browser-qa-runner/actions/workflows/browser-qa.yml/dispatches
+POST https://api.github.com/repos/Voila2020/browser-qa-runner/actions/workflows/browser-qa.yml/dispatches
 Authorization: Bearer <token>
 Accept: application/vnd.github+json
 

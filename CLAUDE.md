@@ -1,7 +1,7 @@
 # browser-qa-runner
 
 Generic real-browser page QA (Playwright/Chromium) run by GitHub Actions `workflow_dispatch`; results are
-POSTed to the caller's `callback_url`. Repo: https://github.com/haider91/browser-qa-runner (**public**).
+POSTed to the caller's `callback_url`. Repo: https://github.com/Voila2020/browser-qa-runner (**public**).
 
 Caller: the n8n project `../voila-auditing-automation` (Stage 4 "Real-browser QA"), replacing Apify
 `apify/playwright-scraper`. Other site workflows may call it too, so nothing site-specific goes here:
