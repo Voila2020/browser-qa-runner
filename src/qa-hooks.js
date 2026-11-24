@@ -1,6 +1,9 @@
 // Attaches the QA listeners to a page before navigation, so nothing emitted during page load is missed.
 // Ported from the Apify "preNavigationHooks" of voila-auditing-automation (same fields, same caps).
 
+// Response headers kept for failed responses (lower-case, as Playwright returns them).
+export const DIAG_HEADERS = ['server', 'cf-ray', 'cf-mitigated', 'cf-cache-status', 'retry-after', 'x-ratelimit-limit', 'x-ratelimit-remaining', 'x-ratelimit-reset', 'ratelimit-limit', 'ratelimit-remaining', 'ratelimit-reset', 'content-type'];
+
 export async function attachQa(page, { blockHosts = [] } = {}) {
   const qa = { console: [], pageErrors: [], failed: [], bad: [], nav: null, warnings: 0 };
 
@@ -49,7 +52,11 @@ export async function attachQa(page, { blockHosts = [] } = {}) {
       qa.nav = { status, url: res.url().slice(0, 500) };
     }
     if (status >= 400) {
-      cap(qa.bad, { url: res.url().slice(0, 500), status, resourceType: req.resourceType() }, 100);
+      // Headers tell who answered: Cloudflare (server/cf-ray/cf-mitigated) or the origin (x-ratelimit-*, retry-after).
+      const h = res.headers();
+      const headers = {};
+      for (const name of DIAG_HEADERS) if (h[name]) headers[name] = String(h[name]).slice(0, 120);
+      cap(qa.bad, { url: res.url().slice(0, 500), status, resourceType: req.resourceType(), headers }, 100);
     }
   });
 

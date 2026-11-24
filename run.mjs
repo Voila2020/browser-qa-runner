@@ -8,7 +8,7 @@
 import { chromium } from 'playwright';
 import { readFile, writeFile, appendFile } from 'node:fs/promises';
 import { attachQa } from './src/qa-hooks.js';
-import { checkPage } from './src/check-page.js';
+import { checkPage, RECHECK_BUDGET_MS } from './src/check-page.js';
 import { robotsAllowed } from './src/robots.js';
 
 const DEFAULTS = {
@@ -63,7 +63,7 @@ async function visit(browser, url, job, userAgent) {
       // so a page with slow resources is reported as slow instead of "failed to open".
       // networkidle is not used: it hangs on pages with open connections.
       await page.goto(url, { waitUntil: 'domcontentloaded', timeout: job.navTimeoutMs });
-      return await withTimeout(checkPage(page, qa, url, job), job.loadWaitMs + job.settleMs + 30000, 'Page check timed out');
+      return await withTimeout(checkPage(page, qa, url, job), job.loadWaitMs + job.settleMs + 30000 + RECHECK_BUDGET_MS + 20000, 'Page check timed out');
     } catch (e) {
       errorMessages.push(errMsg(e));
     } finally {

@@ -2,7 +2,42 @@
 // Ported from the Apify "pageFunction" of voila-auditing-automation: the item has the same fields,
 // so the n8n "Analyze Browser Results" node reads it unchanged.
 
-export async function checkPage(page, qa, url, { loadWaitMs, settleMs }) {
+// A resource that answered 429/502/503/504 while the page was loading is requested again, one at a time and
+// slowly, from the same browser context (same cookies and IP). If it now answers < 400 the first answer was
+// rate limiting caused by the burst of parallel page loads, not a broken file. The result is stored in
+// `recheck` on the entry of qa.bad; the caller decides what to report.
+const RECHECK_STATUSES = [429, 502, 503, 504];
+const RECHECK_MAX_URLS = 15;
+const RECHECK_WAITS_MS = [3000, 8000];
+export const RECHECK_BUDGET_MS = 60000; // total per page; run.mjs adds it to the page timeout
+
+async function recheckBad(page, qa, statuses) {
+  const seen = new Map();
+  for (const b of qa.bad) {
+    if (!statuses.includes(b.status) || b.resourceType === 'document' || seen.has(b.url)) continue;
+    if (seen.size >= RECHECK_MAX_URLS) break;
+    seen.set(b.url, null);
+  }
+  const deadline = Date.now() + RECHECK_BUDGET_MS;
+  for (const url of seen.keys()) {
+    let last = null;
+    for (let attempt = 0; attempt < RECHECK_WAITS_MS.length && Date.now() < deadline; attempt++) {
+      await page.waitForTimeout(RECHECK_WAITS_MS[attempt]);
+      try {
+        const res = await page.context().request.get(url, { timeout: 15000, failOnStatusCode: false, maxRedirects: 3 });
+        last = { status: res.status(), attempts: attempt + 1 };
+        await res.dispose().catch(() => {});
+      } catch (e) {
+        last = { status: 0, attempts: attempt + 1, error: String((e && e.message) || e).split('\n')[0].slice(0, 120) };
+      }
+      if (last.status > 0 && last.status < 400) break;
+    }
+    seen.set(url, last);
+  }
+  for (const b of qa.bad) if (seen.get(b.url)) b.recheck = seen.get(b.url);
+}
+
+export async function checkPage(page, qa, url, { loadWaitMs, settleMs, recheckStatuses = RECHECK_STATUSES }) {
   // Navigation returned at DOMContentLoaded; give the full "load" event a bounded wait.
   let loadTimedOut = false;
   await page.waitForLoadState('load', { timeout: loadWaitMs }).catch(() => { loadTimedOut = true; });
@@ -63,6 +98,8 @@ export async function checkPage(page, qa, url, { loadWaitMs, settleMs }) {
       },
     };
   });
+
+  if (recheckStatuses.length) await recheckBad(page, qa, recheckStatuses).catch(() => {});
 
   return {
     url,
