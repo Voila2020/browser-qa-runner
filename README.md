@@ -46,6 +46,21 @@ callback receives `{ "status": "failed", "reason": ..., "runUrl": ... }` instead
 | `respectRobotsTxt` | `true` | Skip pages disallowed for `User-agent: *` |
 | `maxPages` | `1000` | Cap on `urls` |
 | `userAgent` | browser UA | Default: Chromium's UA without "Headless" |
+| `bypass` | none | `{ "headerName": "x-qa-token", "secretName": "QA_TOKEN_SITE" }`, see below |
+
+## Trusted-monitor header (`bypass`)
+
+Parallel page loads from a GitHub datacenter IP can be answered with 429 by a CDN/WAF (Cloudflare). The site
+owner adds a rule such as `http.request.headers["x-qa-token"][0] eq "<secret>"` -> Skip rate limiting, and the
+runner sends that header.
+
+1. Create a repository secret named `QA_TOKEN_<SITE>` (the name must start with `QA_TOKEN_`) with a long random value.
+2. Put the same value in the WAF rule.
+3. Pass `bypass: { headerName, secretName }` in the job. The secret **value** is never part of the job.
+
+The header is added only to requests for the hosts of the job's own URLs (CDP request interception limited to
+those hosts), never to third parties. Without `bypass`, or if the secret is missing, nothing is sent.
+429/502/503/504 resources are also requested again slowly after each page (`recheck` in `badResponses`).
 
 ## Results
 

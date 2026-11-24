@@ -10,6 +10,7 @@ import { readFile, writeFile, appendFile } from 'node:fs/promises';
 import { attachQa } from './src/qa-hooks.js';
 import { checkPage, RECHECK_BUDGET_MS } from './src/check-page.js';
 import { robotsAllowed } from './src/robots.js';
+import { resolveBypass, attachBypass } from './src/bypass.js';
 
 const DEFAULTS = {
   concurrency: 5,       // more overloaded a Cloudflare + Laravel origin in testing
@@ -41,6 +42,7 @@ async function loadJob() {
   if (!Array.isArray(job.urls) || job.urls.length === 0) throw new Error('Job has no "urls"');
   job.urls = [...new Set(job.urls.map(String).filter((u) => /^https?:\/\//i.test(u)))].slice(0, job.maxPages);
   job.concurrency = Math.max(1, Math.min(MAX_CONCURRENCY, Number(job.concurrency) || 1));
+  job.resolvedBypass = resolveBypass(job);
   return job;
 }
 
@@ -59,6 +61,7 @@ async function visit(browser, url, job, userAgent) {
     try {
       const page = await context.newPage();
       const qa = await attachQa(page, job);
+      if (job.resolvedBypass) await attachBypass(page, job.resolvedBypass);
       // Navigation only waits for the DOM; checkPage then waits for "load" with its own limit,
       // so a page with slow resources is reported as slow instead of "failed to open".
       // networkidle is not used: it hangs on pages with open connections.

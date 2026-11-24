@@ -53,6 +53,9 @@ jobs:
       - name: Run browser QA
         env:
           QA_JOB: ${{ inputs.job }}
+          # All repository secrets as JSON; run.mjs only reads the one named in job.bypass.secretName
+          # (must start with QA_TOKEN_). GitHub masks secret values in the logs.
+          QA_SECRETS: ${{ toJSON(secrets) }}
         run: node run.mjs --out results.json
 
       - name: Send results

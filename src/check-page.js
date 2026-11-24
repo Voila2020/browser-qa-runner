@@ -11,7 +11,7 @@ const RECHECK_MAX_URLS = 15;
 const RECHECK_WAITS_MS = [3000, 8000];
 export const RECHECK_BUDGET_MS = 60000; // total per page; run.mjs adds it to the page timeout
 
-async function recheckBad(page, qa, statuses) {
+async function recheckBad(page, qa, statuses, bypass) {
   const seen = new Map();
   for (const b of qa.bad) {
     if (!statuses.includes(b.status) || b.resourceType === 'document' || seen.has(b.url)) continue;
@@ -24,7 +24,7 @@ async function recheckBad(page, qa, statuses) {
     for (let attempt = 0; attempt < RECHECK_WAITS_MS.length && Date.now() < deadline; attempt++) {
       await page.waitForTimeout(RECHECK_WAITS_MS[attempt]);
       try {
-        const res = await page.context().request.get(url, { timeout: 15000, failOnStatusCode: false, maxRedirects: 3 });
+        const res = await page.context().request.get(url, { timeout: 15000, failOnStatusCode: false, maxRedirects: 3, headers: bypassHeadersFor(bypass, url) });
         last = { status: res.status(), attempts: attempt + 1 };
         await res.dispose().catch(() => {});
       } catch (e) {
@@ -37,7 +37,9 @@ async function recheckBad(page, qa, statuses) {
   for (const b of qa.bad) if (seen.get(b.url)) b.recheck = seen.get(b.url);
 }
 
-export async function checkPage(page, qa, url, { loadWaitMs, settleMs, recheckStatuses = RECHECK_STATUSES }) {
+import { bypassHeadersFor } from './bypass.js';
+
+export async function checkPage(page, qa, url, { loadWaitMs, settleMs, recheckStatuses = RECHECK_STATUSES, resolvedBypass = null }) {
   // Navigation returned at DOMContentLoaded; give the full "load" event a bounded wait.
   let loadTimedOut = false;
   await page.waitForLoadState('load', { timeout: loadWaitMs }).catch(() => { loadTimedOut = true; });
@@ -99,7 +101,7 @@ export async function checkPage(page, qa, url, { loadWaitMs, settleMs, recheckSt
     };
   });
 
-  if (recheckStatuses.length) await recheckBad(page, qa, recheckStatuses).catch(() => {});
+  if (recheckStatuses.length) await recheckBad(page, qa, recheckStatuses, resolvedBypass).catch(() => {});
 
   return {
     url,
